@@ -8,16 +8,23 @@
 
 #include <string>
 #include <utility>
-#include <winsock2.h>
 #include <iostream>
 #include <thread>
-#include <ws2tcpip.h>
+
+#ifdef _WIN32
+#include "tcp_windows_include.h"
+#else
+#include "tcp_unix_include.h"
+#include "tcp_packet.h"
+
+#endif
 
 struct TCP_Packet;
+struct TCP_Header_Fixed_Size;
 
-struct bindToReturned {
+struct BindToReturned {
     int sock;
-    std::thread thread1;
+    std::thread thread;
 };
 
 
@@ -25,11 +32,25 @@ class TCP_CONNECTION {
 private:
     static void listenOn(int sock, void (*func)(TCP_Packet& tcpPacket)) {
         char buffer[1024];
+        // listen on for incoming data
+        while (true) {
+            int data_received = recv(sock, buffer, sizeof buffer, 0);
+            if (data_received < 0) {
+                // I want to error
+                std::cerr << "Data failed to receive";
+            } else {
+                // Handle the data here
+                // Put the first 20 bytes into a fixed tcp header
+                struct TCP_Header_Fixed_Size tcpHeaderFixedSize{};
+                memcpy(&tcpHeaderFixedSize, &buffer, 20);
+            }
+        }
+
 
     }
 
 public:
-    bindToReturned bindTo(char& ip, char& port, void (*onReceived)(TCP_Packet& tcpPacket)) {
+    BindToReturned bindTo(const char ip[], const char port[], void (*onReceived)(TCP_Packet& tcpPacket)) {
         int sock = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
         if (sock < 0) {
             std::cerr << "socket failed";

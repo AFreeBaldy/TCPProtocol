@@ -1,13 +1,15 @@
 #include <iostream>
 #include <cstring>
+#include "tcp_connection.h"
+
+BindToReturned testServer();
+struct BindToReturned;
 
 int main() {
-    std::cout << "Hello, World!" << std::endl;
+    struct BindToReturned bindToReturned = testServer();
+
 
     std::string input;
-
-    // Loop till i type quit
-    // Loop until user types "quit"
     do {
         input  = "Enter 'quit' to quit the application";
         std::cout << input << std::endl;
@@ -16,6 +18,7 @@ int main() {
     }
     while (input != "quit");
     ///
-
+    closesocket(bindToReturned.sock);
+    bindToReturned.thread.join();
     return 0;
 }

@@ -7,14 +7,17 @@
 
 #define SERVER_IP "127.0.0.1"
 #define SERVER_PORT "10000"
-void onPacketReceived(TCP_PACKET packet) {
+
+struct BindToReturned;
+void onPacketReceived(TCP_Packet& packet) {
 
 
 }
 
-void testServer() {
+BindToReturned testServer() {
     // Setup connection
     TCP_CONNECTION connection;
     // Bind to a port
-    //connection.bindTo(SERVER_IP, SERVER_PORT, onPacketReceived);
+    struct BindToReturned bindToReturned = connection.bindTo(SERVER_IP, SERVER_PORT, onPacketReceived);
+    return bindToReturned;
 }
