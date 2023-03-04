@@ -30,10 +30,13 @@ struct BindToReturned {
 
 class TCP_CONNECTION {
 private:
-    static void listenOn(int sock, void (*func)(TCP_Packet& tcpPacket)) {
+    int sock;
+    std::unique_ptr<std>()std::thread thread;
+
+    static void listenOn(int sock, void (*func)(TCP_Packet& tcpPacket), std::atomic<bool>& joinRequested) {
         char buffer[1024];
         // listen on for incoming data
-        while (true) {
+        while (!joinRequested) {
             int data_received = recv(sock, buffer, sizeof buffer, 0);
             if (data_received < 0) {
                 // I want to error
@@ -48,10 +51,14 @@ private:
 
 
     }
+    static void test() {
 
+    }
 public:
+    std::atomic<bool> joinRequested = false;
+
     BindToReturned bindTo(const char ip[], const char port[], void (*onReceived)(TCP_Packet& tcpPacket)) {
-        int sock = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
+        sock = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
         if (sock < 0) {
             std::cerr << "socket failed";
             exit(EXIT_FAILURE);
@@ -66,7 +73,8 @@ public:
             closesocket(sock);
             exit(EXIT_FAILURE);
         }
-        std::thread listeningThread(listenOn, sock, onReceived);
+        // TODO dont forget to delete the pointer
+        thread.swap( *(new std::thread(listenOn, sock, onReceived, std::ref(joinRequested))));
 
         return {sock, std::move(listeningThread)};
     }
