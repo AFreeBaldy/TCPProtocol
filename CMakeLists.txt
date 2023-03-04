@@ -6,4 +6,4 @@ set(CMAKE_CXX_STANDARD 23)
 include_directories(server)
 include_directories(tcp)
 
-add_executable(TCPProtocol main.cpp server/server.cpp tcp/connection.h)
+add_executable(TCPProtocol main.cpp server/server.cpp tcp/tcp_connection.h tcp/tcp_packet.h)
