@@ -10,29 +10,18 @@
 #include <utility>
 #include <iostream>
 #include <thread>
-
 #ifdef _WIN32
 #include "tcp_windows_include.h"
 #else
 #include "tcp_unix_include.h"
-#include "tcp_packet.h"
-
 #endif
+#include "tcp_packet.h"
 
 struct TCP_Packet;
 struct TCP_Header_Fixed_Size;
 
-struct BindToReturned {
-    int sock;
-    std::thread thread;
-};
-
-
 class TCP_CONNECTION {
 private:
-    int sock;
-    std::unique_ptr<std>()std::thread thread;
-
     static void listenOn(int sock, void (*func)(TCP_Packet& tcpPacket), std::atomic<bool>& joinRequested) {
         char buffer[1024];
         // listen on for incoming data
@@ -51,33 +40,45 @@ private:
 
 
     }
-    static void test() {
-
-    }
 public:
+    TCP_CONNECTION() = default;
+    std::thread thread;
+    SOCKET ListenSocket = INVALID_SOCKET;
     std::atomic<bool> joinRequested = false;
 
-    BindToReturned bindTo(const char ip[], const char port[], void (*onReceived)(TCP_Packet& tcpPacket)) {
-        sock = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
-        if (sock < 0) {
+
+
+    void bindTo(const char ip[], const int port, void (*onReceived)(TCP_Packet& tcpPacket)) {
+        // Initialize Winsock
+        WSADATA wsaData;
+        int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
+        if (iResult != 0) {
+            std::cerr << "WSAStartup failed with error: " << iResult << std::endl;
+            exit(EXIT_FAILURE);
+        }
+
+        ListenSocket = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
+        if (ListenSocket < 0) {
+            WSACleanup();
             std::cerr << "socket failed";
             exit(EXIT_FAILURE);
         }
         struct sockaddr_in sockaddrIn;
         sockaddrIn.sin_family = AF_INET;
-        sockaddrIn.sin_port = htons(12345);
+        sockaddrIn.sin_port = htons(port);
         sockaddrIn.sin_addr.s_addr = INADDR_ANY;
 
-        if (bind(sock, (struct sockaddr*)&sockaddrIn, sizeof(sockaddrIn)) == -1) {
+        if (bind(ListenSocket, (struct sockaddr*)&sockaddrIn, sizeof(sockaddrIn)) == -1) {
             std::cerr << "Error binding socket\n";
-            closesocket(sock);
+            closesocket(ListenSocket);
             exit(EXIT_FAILURE);
         }
-        // TODO dont forget to delete the pointer
-        thread.swap( *(new std::thread(listenOn, sock, onReceived, std::ref(joinRequested))));
-
-        return {sock, std::move(listeningThread)};
+        std::unique_ptr<std::thread> threadPtr;
+        threadPtr = std::make_unique<std::thread>(listenOn, ListenSocket, onReceived, std::ref(joinRequested));
+        thread.swap(*threadPtr);
     }
+
+
 };
 
 #endif //TCPPROTOCOL_TCP_CONNECTION_H

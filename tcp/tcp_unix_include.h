@@ -10,5 +10,6 @@
 #include <unistd.h>
 
 #define closesocket(int) close(int)
+#define SOCKET int
 
 #endif //TCPPROTOCOL_TCP_UNIX_INCLUDE_H

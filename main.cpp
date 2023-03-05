@@ -1,12 +1,14 @@
 #include <iostream>
 #include <cstring>
+#include <memory>
 #include "tcp_connection.h"
 
-BindToReturned testServer();
+class TCP_CONNECTION;
 struct BindToReturned;
+std::shared_ptr<TCP_CONNECTION> testServer();
 
 int main() {
-    struct BindToReturned bindToReturned = testServer();
+    std::shared_ptr<TCP_CONNECTION> connection = testServer();
 
 
     std::string input;
@@ -18,7 +20,9 @@ int main() {
     }
     while (input != "quit");
     ///
-    closesocket(bindToReturned.sock);
-    bindToReturned.thread.join();
+    //closesocket(connection->sock);
+    connection->joinRequested = true;
+    //connection->thread.join();
+    WSACleanup();
     return 0;
 }
