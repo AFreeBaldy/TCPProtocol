@@ -11,6 +11,7 @@
 #include <memory>
 #include <thread>
 #include <iostream>
+#include <utility>
 #include "tcp_packet.h"
 
 #define DEFAULT_INCOMING_DATA_BUFFER_SIZE 1024
@@ -21,36 +22,34 @@
 class TCP_Connection {
 private:
     SOCKET sock;
-    std::thread thread;
     bool keepListening = true;
+    const std::string ip;
+    const unsigned short port;
 
-    int listenOn(void(*onPacketRecieved)(TCP_Packet tcpPacket, sockaddr_in clientInfo)) {
-        // Incoming connections will be routed to this socket for handling
-        auto otherSocket = INVALID_SOCKET;
+    int p_listenOn(int (*onPR)(TCP_Packet& packet, sockaddr_in clientAddrInfo)) {
 
         // This struct is filled with client address information
         struct sockaddr_in clientSockAddrIn{};
         int addrLen = sizeof(clientSockAddrIn);
         auto *ptr = reinterpret_cast<sockaddr *>(&clientSockAddrIn);
 
+
+        // Needed for polling
+
+        WSAPOLLFD mySocketPollFD = {sock, POLLIN, 0};
         // listen for incoming connections
         do {
-            // Accept a connection and send it to otherSocket for handling
-            otherSocket = accept(sock, ptr, &addrLen);
-            if (otherSocket == INVALID_SOCKET) {
-                //TODO potential error logging in the future
-                std::cout << "Socket failed to create" << "\n";
-                return G_BASE_ERROR;
-            }
+            int results = WSAPoll(&mySocketPollFD, 1, 5000);
+            if (results == SOCKET_ERROR) {
 
-            // Buffer that will hold the data being recieved
-            char incomingDataBuffer[DEFAULT_INCOMING_DATA_BUFFER_SIZE];
-            int amountOfBytesReceived;
-
-            do {
-                amountOfBytesReceived = recv(otherSocket, incomingDataBuffer, sizeof(incomingDataBuffer), 0);
-
-                // Copy the first 20 bytes into the tcp fixed size header
+            } else if (results == 0) {
+                // Socket timed out
+            } else {
+                // Accept a connection and send it to otherSocket for handling
+                char incomingDataBuffer[DEFAULT_INCOMING_DATA_BUFFER_SIZE];
+                ssize_t amountOfBytesReceived = recvfrom(sock, incomingDataBuffer, sizeof incomingDataBuffer, 0, ptr, &addrLen);
+                if (amountOfBytesReceived == 0) continue;
+                if (amountOfBytesReceived == SOCKET_ERROR) continue;
                 struct TCP_Header_Fixed_Size fixedTCPHeader{};
                 memcpy(&fixedTCPHeader, incomingDataBuffer, sizeof(fixedTCPHeader));
 
@@ -70,12 +69,7 @@ private:
                 int offset = sizeof tcpPacket.tcpHeader + padding;
                 memcpy(tcpPacket.data, incomingDataBuffer + offset, amountOfBytesReceived - offset);
 
-                onPacketRecieved(tcpPacket, clientSockAddrIn);
-            } while (amountOfBytesReceived > 0 && keepListening);
-            // Log any errors
-            if (amountOfBytesReceived == SOCKET_ERROR) {
-                //TODO add error logging functionality in the future
-                return G_BASE_ERROR;
+                (*onPR)(tcpPacket, clientSockAddrIn);
             }
         } while(keepListening);
 
@@ -84,14 +78,8 @@ private:
 
 
 public:
-
-    int unbind() {
-        int socketClosed = closesocket(sock);
-        if (socketClosed) {
-            return 1;
-        }
-        isBinded = false;
-        return 0;
+    TCP_Connection(std::string ip, const unsigned short port) :ip(std::move(ip)), port(port) {
+        sock = INVALID_SOCKET;
     }
 
     int send(const char (&buffer)[DEFAULT_INCOMING_DATA_BUFFER_SIZE], const char ip[4], const unsigned short port) {
@@ -106,7 +94,7 @@ public:
 
     }
 
-    int listenOn(const std::string ip, const unsigned short port, void(*onPacketRecieved)(TCP_Packet tcpPacket, sockaddr_in clientInfo)) {
+    static int listenOn(std::shared_ptr<TCP_Connection> connection, const std::string& ip, const unsigned short port, int (*onPR)(TCP_Packet& packet, sockaddr_in clientAddrInfo)) {
         // Initialize the Winsock
         WSADATA wsaData;
         int wsaStartupResults = WSAStartup(MAKEWORD(2, 2), &wsaData);
@@ -116,8 +104,8 @@ public:
             return G_BASE_ERROR;
         }
 
-        sock = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
-        if (sock == INVALID_SOCKET) {
+        connection->sock = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
+        if (connection->sock == INVALID_SOCKET) {
             WSACleanup();
             return G_BASE_ERROR;
         }
@@ -127,29 +115,30 @@ public:
         sockaddrIn.sin_port = htons(port);
         if (inet_pton(AF_INET, ip.c_str(), &sockaddrIn.sin_addr) == -1) {
             WSACleanup();
-            closesocket(sock);
+            closesocket(connection->sock);
             return G_BASE_ERROR;
         }
 
         auto* ptr = reinterpret_cast<sockaddr *>(&sockaddrIn);
 
-        if (bind(sock, ptr, sizeof(sockaddrIn)) == SOCKET_ERROR) {
-            closesocket(sock);
+        if (bind(connection->sock, ptr, sizeof(sockaddrIn)) == SOCKET_ERROR) {
+            closesocket(connection->sock);
             WSACleanup();
             return G_BASE_ERROR;
         }
 
-        if (listen(sock, SOMAXCONN ) == SOCKET_ERROR) {
-            closesocket(sock);
-            WSACleanup();
-            return G_BASE_ERROR;
-        }
-
-        listenOn(onPacketRecieved);
+        connection->p_listenOn(onPR);
 
     }
 
-
+    int stopListening() {
+        keepListening = false;
+        WSACleanup();
+        int socketClosed = closesocket(sock);
+        if (socketClosed) {
+            return 1;
+        }
+    }
 };
 
 #endif //TCPPROTOCOL_TCP_WINDOWS_CONNECTION_H

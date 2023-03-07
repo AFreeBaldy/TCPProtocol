@@ -21,25 +21,6 @@ struct TCP_Packet;
 struct TCP_Header_Fixed_Size;
 
 class TCP_CONNECTION {
-private:
-    static void listenOn(int sock, void (*func)(TCP_Packet& tcpPacket), std::atomic<bool>& joinRequested) {
-        char buffer[1024];
-        // listen on for incoming data
-        while (!joinRequested) {
-            int data_received = recv(sock, buffer, sizeof buffer, 0);
-            if (data_received < 0) {
-                // I want to error
-                std::cerr << "Data failed to receive";
-            } else {
-                // Handle the data here
-                // Put the first 20 bytes into a fixed tcp header
-                struct TCP_Header_Fixed_Size tcpHeaderFixedSize{};
-                memcpy(&tcpHeaderFixedSize, &buffer, 20);
-            }
-        }
-
-
-    }
 public:
     TCP_CONNECTION() = default;
     std::thread thread;
@@ -79,6 +60,24 @@ public:
     }
 
 
+    static void listenOn(int sock, void (*func)(TCP_Packet& tcpPacket), std::atomic<bool>& joinRequested) {
+        char buffer[1024];
+        // listen on for incoming data
+        while (!joinRequested) {
+            int data_received = recv(sock, buffer, sizeof buffer, 0);
+            if (data_received < 0) {
+                // I want to error
+                std::cerr << "Data failed to receive";
+            } else {
+                // Handle the data here
+                // Put the first 20 bytes into a fixed tcp header
+                struct TCP_Header_Fixed_Size tcpHeaderFixedSize{};
+                memcpy(&tcpHeaderFixedSize, &buffer, 20);
+            }
+        }
+
+
+    }
 };
 
 #endif //TCPPROTOCOL_TCP_CONNECTION_H

@@ -2,13 +2,18 @@
 #include <cstring>
 #include <memory>
 #include "tcp_connection.h"
+#include "tcp_windows_connection.h"
 
-class TCP_CONNECTION;
-struct BindToReturned;
-std::shared_ptr<TCP_CONNECTION> testServer();
+struct Server {
+    std::thread thread;
+    std::shared_ptr<TCP_Connection> connection;
+};
+
+struct Server startServer();
+int stopServer(struct Server& server);
 
 int main() {
-    std::shared_ptr<TCP_CONNECTION> connection = testServer();
+    struct Server server = startServer();
 
 
     std::string input;
@@ -18,11 +23,7 @@ int main() {
         std::cin >> input;
         std::transform(input.begin(), input.end(), input.begin(), [](char c){ return std::tolower(c); });
     }
-    while (input != "quit");
-    ///
-    //closesocket(connection->sock);
-    connection->joinRequested = true;
-    //connection->thread.join();
-    WSACleanup();
-    return 0;
+    while (input != "q");
+    stopServer(server);
+
 }
